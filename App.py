@@ -1,4 +1,4 @@
-# app.py - TradeVision (updated with richer "Mis intereses" + IA chat)
+# app.py - TradeVision (actualizado con landing, login/registro separados y heatmap de portafolio)
 
 import math
 import datetime as dt
@@ -10,6 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px  # NUEVO: para el treemap
 import streamlit as st
 import yfinance as yf
 
@@ -582,80 +583,126 @@ def ensure_auth_state():
         "user_email": "",
         "user_intereses": [],
         "selected_interest": None,
+        "auth_step": "landing",   # NUEVO: estado de vista (landing/login/registro)
     }.items():
         st.session_state.setdefault(k, v)
 
-def auth_view():
-    ensure_auth_state()
+# ---------------------------
+# NUEVA LANDING / LOGIN / REGISTER
+# ---------------------------
+
+def landing_view():
     st.title("TradeVision")
     st.subheader("Gestión inteligente de tu portafolio de inversión")
 
+    st.write(
+        "Antes de entrar a tu tablero, elige si quieres **iniciar sesión** o **crear una cuenta nueva**."
+    )
+
     col1, col2 = st.columns(2)
-
-    # Login
     with col1:
-        st.markdown("#### Inicia sesión")
-        email = st.text_input("Correo electrónico", key="login_email")
-        pwd = st.text_input("Contraseña", type="password", key="login_pwd")
-        if st.button("Entrar", use_container_width=True, key="btn_login", type="primary"):
-            users = load_users()
-            row = users[users["email"].str.lower() == email.strip().lower()]
-            if row.empty:
-                st.error("No encontramos una cuenta con ese correo.")
-            else:
-                r = row.iloc[0]
-                if str(r["password"]) != pwd:
-                    st.error("Contraseña incorrecta.")
-                else:
-                    st.session_state["is_auth"] = True
-                    st.session_state["user_id"] = int(r["user_id"])
-                    st.session_state["user_name"] = str(r["name"])
-                    st.session_state["user_email"] = str(r["email"])
-                    st.session_state["user_intereses"] = parse_intereses_str(r["intereses"])
-                    st.rerun()
-
-    # Register
+        if st.button("Iniciar sesión", use_container_width=True, key="landing_login"):
+            st.session_state["auth_step"] = "login"
+            st.rerun()
     with col2:
-        st.markdown("#### Crea tu cuenta")
-        name2 = st.text_input("Nombre completo", key="reg_name")
-        email2 = st.text_input("Correo electrónico", key="reg_email")
-        pwd2 = st.text_input("Elige una contraseña", type="password", key="reg_pwd")
-        st.markdown("Selecciona tus principales intereses de inversión:")
-        intereses_opciones = [
-            "Tecnología / Big Tech",
-            "Finanzas / Bancos",
-            "Crecimiento agresivo",
-            "Consumo defensivo",
-            "Dividendos / Ingreso pasivo",
-        ]
-        intereses_sel = st.multiselect(
-            "Intereses",
-            intereses_opciones,
-            key="reg_intereses"
-        )
-        if st.button("Crear cuenta", use_container_width=True, key="btn_register", type="primary"):
-            if not (name2 and email2 and pwd2):
-                st.error("Completa nombre, correo y contraseña.")
-            else:
-                users = load_users()
-                if not users[users["email"].str.lower() == email2.strip().lower()].empty:
-                    st.error("Ya existe una cuenta registrada con ese correo.")
-                else:
-                    uid = get_next_user_id(users)
-                    new_row = {
-                        "user_id": uid,
-                        "name": name2.strip(),
-                        "email": email2.strip().lower(),
-                        "password": pwd2,
-                        "intereses": intereses_to_str(intereses_sel),
-                    }
-                    users = pd.concat([users, pd.DataFrame([new_row])], ignore_index=True)
-                    save_users(users)
-                    st.success("Cuenta creada. Ahora puedes iniciar sesión con tu correo y contraseña.")
+        if st.button("Crear cuenta", type="primary", use_container_width=True, key="landing_register"):
+            st.session_state["auth_step"] = "register"
+            st.rerun()
 
     st.markdown("---")
-    st.caption("TradeVision no ofrece asesoría financiera personalizada. La información mostrada es únicamente con fines informativos.")
-    return False
+    st.caption("TradeVision no ofrece asesoría financiera personalizada. Solo información con fines educativos.")
+
+def login_view():
+    st.title("TradeVision")
+    st.subheader("Inicia sesión")
+
+    email = st.text_input("Correo electrónico", key="login_email")
+    pwd = st.text_input("Contraseña", type="password", key="login_pwd")
+
+    if st.button("Entrar", use_container_width=True, key="btn_login", type="primary"):
+        users = load_users()
+        row = users[users["email"].str.lower() == email.strip().lower()]
+        if row.empty:
+            st.error("No encontramos una cuenta con ese correo.")
+        else:
+            r = row.iloc[0]
+            if str(r["password"]) != pwd:
+                st.error("Contraseña incorrecta.")
+            else:
+                st.session_state["is_auth"] = True
+                st.session_state["user_id"] = int(r["user_id"])
+                st.session_state["user_name"] = str(r["name"])
+                st.session_state["user_email"] = str(r["email"])
+                st.session_state["user_intereses"] = parse_intereses_str(r["intereses"])
+                st.session_state["auth_step"] = "app"
+                st.success("Inicio de sesión correcto. Redirigiendo a tu tablero...")
+                st.rerun()
+
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Crear cuenta nueva", use_container_width=True, key="go_register_from_login"):
+            st.session_state["auth_step"] = "register"
+            st.rerun()
+    with col2:
+        if st.button("Volver al inicio", use_container_width=True, key="back_to_landing_from_login"):
+            st.session_state["auth_step"] = "landing"
+            st.rerun()
+
+def register_view():
+    st.title("TradeVision")
+    st.subheader("Crea tu cuenta")
+
+    name2 = st.text_input("Nombre completo", key="reg_name")
+    email2 = st.text_input("Correo electrónico", key="reg_email")
+    pwd2 = st.text_input("Elige una contraseña", type="password", key="reg_pwd")
+
+    st.markdown("Selecciona tus principales intereses de inversión:")
+    intereses_opciones = [
+        "Tecnología / Big Tech",
+        "Finanzas / Bancos",
+        "Crecimiento agresivo",
+        "Consumo defensivo",
+        "Dividendos / Ingreso pasivo",
+    ]
+    intereses_sel = st.multiselect(
+        "Intereses",
+        intereses_opciones,
+        key="reg_intereses"
+    )
+
+    if st.button("Crear cuenta", use_container_width=True, key="btn_register", type="primary"):
+        if not (name2 and email2 and pwd2):
+            st.error("Completa nombre, correo y contraseña.")
+        else:
+            users = load_users()
+            if not users[users["email"].str.lower() == email2.strip().lower()].empty:
+                st.error("Ya existe una cuenta registrada con ese correo.")
+            else:
+                uid = get_next_user_id(users)
+                new_row = {
+                    "user_id": uid,
+                    "name": name2.strip(),
+                    "email": email2.strip().lower(),
+                    "password": pwd2,
+                    "intereses": intereses_to_str(intereses_sel),
+                }
+                users = pd.concat([users, pd.DataFrame([new_row])], ignore_index=True)
+                save_users(users)
+                st.success("Cuenta creada. Ahora puedes iniciar sesión con tu correo y contraseña.")
+                st.session_state["auth_step"] = "login"
+                st.rerun()
+
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Ya tengo cuenta (iniciar sesión)", use_container_width=True, key="go_login_from_register"):
+            st.session_state["auth_step"] = "login"
+            st.rerun()
+    with col2:
+        if st.button("Volver al inicio", use_container_width=True, key="back_to_landing_from_register"):
+            st.session_state["auth_step"] = "landing"
+            st.rerun()
 
 # ---- Portfolio helpers ----
 def get_current_user_id() -> str:
@@ -1176,6 +1223,28 @@ def render_interest_insights(selected_interest: Optional[str], use_gemini: bool,
         else:
             st.warning("No se pudo generar la respuesta en este momento. Intenta más tarde.")
 
+# ---- Heatmap de portafolio (NUEVO) ----
+def render_portfolio_heatmap(df_res: pd.DataFrame):
+    st.markdown("##### Mapa de calor de tu portafolio (por ticker)")
+    if df_res.empty:
+        st.info("Agrega posiciones activas para ver el mapa de calor.")
+        return
+    df_tree = (
+        df_res.groupby("ticker", as_index=False)["valor_actual"]
+        .sum()
+        .rename(columns={"valor_actual": "valor"})
+    )
+    fig = px.treemap(
+        df_tree,
+        path=["ticker"],
+        values="valor",
+        hover_data={"valor": ":,.2f"},
+    )
+    fig.update_traces(
+        hovertemplate="<b>%{label}</b><br>Valor: %{value:,.2f}<extra></extra>"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 # ---- Main app ----
 def main_app():
     use_gemini = st.toggle("Activar comentarios con IA (Gemini)", True)
@@ -1241,6 +1310,11 @@ def main_app():
                 delta=fmt_pct(total_pl/total_inv) if total_inv>0 else None
             )
             c4.metric("Resultado del día", fmt_money(total_pl_dia))
+
+            # 🔥 NUEVO: Heatmap de tu portafolio
+            if not df_res.empty:
+                render_portfolio_heatmap(df_res)
+
             col_w, col_l = st.columns(2)
             with col_w:
                 st.markdown("##### Mejores posiciones")
@@ -1662,8 +1736,18 @@ def main_app():
 def main():
     ensure_auth_state()
     if not st.session_state.get("is_auth", False):
-        auth_view()
+        step = st.session_state.get("auth_step", "landing")
+        if step == "landing":
+            landing_view()
+        elif step == "login":
+            login_view()
+        elif step == "register":
+            register_view()
+        else:
+            landing_view()
         return
+
+    # Usuario autenticado → sidebar + app
     st.sidebar.markdown("### Usuario")
     st.sidebar.write(st.session_state.get("user_name", ""))
     st.sidebar.write(st.session_state.get("user_email", ""))
@@ -1680,9 +1764,10 @@ def main():
     else:
         st.sidebar.caption("Puedes configurar tus intereses al crear o editar tu cuenta.")
     if st.sidebar.button("Cerrar sesión", key="btn_logout"):
-        for k in ["is_auth","user_id","user_name","user_email","user_intereses","selected_interest"]:
+        for k in ["is_auth","user_id","user_name","user_email","user_intereses","selected_interest","auth_step"]:
             st.session_state.pop(k, None)
         st.rerun()
+
     main_app()
 
 if __name__ == "__main__":
