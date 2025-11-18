@@ -20,16 +20,29 @@ try:
 except Exception:
     GENAI_SDK_AVAILABLE = False
 
-# API KEY (from config or env)
+# ─────────────────────────────────────────────────────────────────────────────
+# API KEY (desde archivo privado o variable de entorno / secrets)
+# ─────────────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = ""
 
+# 1) Desarrollo local: config_private.py (no se sube a GitHub)
 try:
     from config_private import GEMINI_API_KEY as _LOCAL_GEMINI_API_KEY
     GEMINI_API_KEY = _LOCAL_GEMINI_API_KEY
 except Exception:
+    import os
+    # 2) Variable de entorno estándar (por si la defines así)
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# 3) Streamlit Cloud: secrets (GEMINI_API_KEY en Settings → Secrets)
+try:
+    if not GEMINI_API_KEY:
+        GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
+except Exception:
+    pass
+
 API_KEY = GEMINI_API_KEY
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Paths
 BASE_DIR = Path(".")
