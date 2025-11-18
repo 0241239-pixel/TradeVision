@@ -1,0 +1,21 @@
+# ==========================================
+# TradeVision - .gitignore limpio y correcto
+# ==========================================
+
+# Entorno virtual y archivos temporales
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Config privada (API keys)
+config_private.py
+
+# Datos locales: NO subir CSV con nombres/correos/portafolios
+data/*.csv
+data/*.json
+data/*.txt
+data/*.log
+
+# Pero sí queremos que exista la carpeta data vacía en el repo:
+!data/.gitkeep
